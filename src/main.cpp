@@ -51,7 +51,7 @@ void switcher(const int state) {
   }
 }
 
-RotaryEncoder re = RotaryEncoder(PIN_A, PIN_B, PIN_SW);
+RotaryEncoder re = RotaryEncoder(PIN_A, PIN_B, PIN_SW, PIN_BEEPER);
 
 void setup() {
   Serial.begin(BAUD_RATE);

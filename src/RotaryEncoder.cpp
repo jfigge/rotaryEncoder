@@ -3,17 +3,28 @@
 const uint8_t RotaryEncoder::states[] = {0,4,1,0,2,1,1,0,2,3,1,2,2,3,3,0,5,4,4,0,5,4,6,5,5,6,6,0};
 
 RotaryEncoder::RotaryEncoder(int a, int b, int sw) {
+  this->a = a;
+  this->b = b;
+  this->sw = sw; 
+
   pinMode(a, INPUT);
   pinMode(b, INPUT);
   pinMode(sw, INPUT_PULLUP);
 }
 
+RotaryEncoder::RotaryEncoder(int a, int b, int sw, int hapticPin) : RotaryEncoder(a, b, sw) {
+  this->h = hapticPin;
+  pinMode(h, INPUT);
+}
+
 void RotaryEncoder::setRotationHandler(RotataryHandler handler) {
   this->rotaryHandler = handler;
 }
-
 void RotaryEncoder::setSwitchHandler(SwitchHandler handler) {
   this->switchHandler = handler;
+}
+void RotaryEncoder::setHapticHandler(HapticHandler handler) {
+    this->hapticHandler = handler;
 }
 
 int RotaryEncoder::decodeRotaryEncoder() {
@@ -45,12 +56,12 @@ int RotaryEncoder::decodeSwitch() {
     lastSwitchState = switchState;
     if (!switchState) {
       timer = millis();
-      //beep(1);
       result = RE_SWITCH_DOWN;
+      //beep(1);
     } else {
       timer = millis() - timer;
-      //beep(2);
       result = timer > 1000 ? RE_SWITCH_LONG_RELEASE : RE_SWITCH_SHORT_RELEASE;
+      //beep(2);
     }
   } else if (!switchState) {
     result = millis() - timer > 1000 ? RE_SWITCH_LONG_HOLD : RE_SWITCH_SHORT_HOLD;
@@ -58,31 +69,38 @@ int RotaryEncoder::decodeSwitch() {
 
   if (result != lastResult) {
     lastResult = result;
-    if (switchHandler != 0) {
-      switchHandler(result);
-    }
+   // if (switchHandler != 0) {
+   //   switchHandler(result);
+   // }
   }
   return result;
 }
 
-void beep(int type) {
-  switch (type) {
-  case 1: // Button down
-  case 2: // Button up
-    tone(PIN_BEEPER, 400);
-    delay(2);
-    break;
-  case 3: // Error
-    tone(PIN_BEEPER, 1000);
-    delay(10);
-    break;
-  default: // Menu
-    tone(PIN_BEEPER, 250);
-    delay(1);
-    tone(PIN_BEEPER, 250);
-    delay(1);
-    tone(PIN_BEEPER, 250);
-    delay(1);
-  }
-  noTone(PIN_BEEPER);
-}
+// void RotaryEncoder::beep(int type) {
+//   if (beeperPin != -1) {
+//     if (beeperHandler != 0) {
+//       beeperHandler(b);
+//     } else {
+//         Serial.println(type);
+//       switch (type) {
+//       case RE_SWITCH_UP:
+//       case RE_SWITCH_DOWN:
+//         tone(PIN_BEEPER, 400);
+//         delay(2);
+//         break;
+//       case 3: // Error
+//         tone(PIN_BEEPER, 1000);
+//         delay(10);
+//         break;
+//       default: // Menu
+//         tone(PIN_BEEPER, 250);
+//         delay(1);
+//         tone(PIN_BEEPER, 250);
+//         delay(1);
+//         tone(PIN_BEEPER, 250);
+//         delay(1);
+//       }
+//       noTone(PIN_BEEPER);
+//     }
+//   }
+// }
