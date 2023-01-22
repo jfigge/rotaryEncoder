@@ -1,106 +1,98 @@
 #include "RotaryEncoder.h"
 
-const uint8_t RotaryEncoder::states[] = {0,4,1,0,2,1,1,0,2,3,1,2,2,3,3,0,5,4,4,0,5,4,6,5,5,6,6,0};
+const uint8_t RotaryEncoder::states[] = {0, 4, 1, 0, 2, 1, 1, 0, 2, 3,
+                                         1, 2, 2, 3, 3, 0, 5, 4, 4, 0,
+                                         5, 4, 6, 5, 5, 6, 6, 0};
 
-RotaryEncoder::RotaryEncoder(int a, int b, int sw) {
-  this->a = a;
-  this->b = b;
-  this->sw = sw; 
-
-  pinMode(a, INPUT);
-  pinMode(b, INPUT);
-  pinMode(sw, INPUT_PULLUP);
+RotaryEncoder::RotaryEncoder(int a, int b) {
+    this->a = a;
+    this->b = b;
+    this->sw = -1;
+    pinMode(a, INPUT);
+    pinMode(b, INPUT);
 }
-
-RotaryEncoder::RotaryEncoder(int a, int b, int sw, int hapticPin) : RotaryEncoder(a, b, sw) {
-  this->h = hapticPin;
-  pinMode(h, INPUT);
+RotaryEncoder::RotaryEncoder(int a, int b, int sw) : RotaryEncoder(a, b) {
+    this->sw = sw;
+    pinMode(sw, INPUT_PULLUP);
+    lastSwitchState = PIN_PORT & SW_BYTE;
 }
 
 void RotaryEncoder::setRotationHandler(RotataryHandler handler) {
-  this->rotaryHandler = handler;
+    this->rotaryHandler = handler;
 }
 void RotaryEncoder::setSwitchHandler(SwitchHandler handler) {
-  this->switchHandler = handler;
+    this->switchHandler = handler;
 }
-void RotaryEncoder::setHapticHandler(HapticHandler handler) {
-    this->hapticHandler = handler;
+
+bool RotaryEncoder::setDoubleClickDelay(unsigned int delay) {
+    if (delay > 0 && delay < longClkDelay) {
+        dblClkDelay = delay;
+        return true;
+    }
+    return false;
+}
+bool RotaryEncoder::setLockClickDelay(unsigned int delay) {
+    if (delay > dblClkDelay) {
+        longClkDelay = delay;
+        return true;
+    }
+    return false;
 }
 
 int RotaryEncoder::decodeRotaryEncoder() {
-  uint8_t raw = PIN_PORT & AB_BYTE;
-  int result = 0;
-  if (lastRaw != raw) {
-    lastRaw = raw;
-    uint8_t state = states[(raw >> AB_SHIFT) | (lastState << 2)];
-    if (state == 0) {
-      if (lastState == 6) {
-        result = RE_CLOCKWISE;
-      } else if (lastState == 3) {
-        result = RE_ANTICLOCKWISE;
-      }
-      if (rotaryHandler != 0) {
-        rotaryHandler(result);
-      }
+    uint8_t raw = PIN_PORT & AB_BYTE;
+    int result = RE_NO_ACTION;
+    if (lastRaw != raw) {
+        lastRaw = raw;
+        uint8_t state = states[(raw >> AB_SHIFT) | (lastState << 2)];
+        if (state == 0) {
+            if (lastState == 6) {
+                result = RE_TURN_CLOCKWISE;
+            } else if (lastState == 3) {
+                result = RE_TURN_ANTICLOCKWISE;
+            }
+            if (result != 0 && rotaryHandler != 0) {
+                rotaryHandler(result);
+            }
+        }
+        lastState = state;
     }
-    lastState = state;
-  }
-  return result;
+    return result;
 }
-
 int RotaryEncoder::decodeSwitch() {
-  int result = RE_SWITCH_UP;
-  static int lastResult = RE_SWITCH_UP;
-  uint8_t switchState = PIN_PORT & SW_BYTE;
-  if (lastSwitchState != switchState) {
-    lastSwitchState = switchState;
-    if (!switchState) {
-      timer = millis();
-      result = RE_SWITCH_DOWN;
-      //beep(1);
+    int result = RE_NO_ACTION;
+    if (event != RE_NO_ACTION || sw == -1) {
+        result = event;
+        event = RE_NO_ACTION;
     } else {
-      timer = millis() - timer;
-      result = timer > 1000 ? RE_SWITCH_LONG_RELEASE : RE_SWITCH_SHORT_RELEASE;
-      //beep(2);
+        uint8_t switchState = PIN_PORT & SW_BYTE;
+        if (lastSwitchState != switchState) {
+            lastSwitchState = switchState;
+            if (!switchState) {
+                result = RE_SWITCH_DOWN;
+                timer = millis();
+            } else {
+                result = RE_SWITCH_UP;
+                if (longHold) {
+                    event = RE_SWITCH_LONG_CLICK;
+                    longHold = false;
+                } else if (dblClkTimer == 0) {
+                    dblClkTimer = millis();
+                } else {
+                    event = millis() - dblClkTimer < dblClkDelay ? RE_SWITCH_DOUBLE_CLICK : RE_SWITCH_CLICK;
+                    dblClkTimer = 0;
+                }
+            }
+        } else if (!switchState && !longHold && millis() - timer > longClkDelay) {
+            result = RE_SWITCH_LONG_HOLD;
+            longHold = true;
+        } else if (dblClkTimer != 0 && millis() - dblClkTimer >= dblClkDelay) {
+            result = RE_SWITCH_CLICK;
+            dblClkTimer = 0;
+        }
     }
-  } else if (!switchState) {
-    result = millis() - timer > 1000 ? RE_SWITCH_LONG_HOLD : RE_SWITCH_SHORT_HOLD;
-  }
-
-  if (result != lastResult) {
-    lastResult = result;
-   // if (switchHandler != 0) {
-   //   switchHandler(result);
-   // }
-  }
-  return result;
+    if (result != RE_NO_ACTION && switchHandler != 0) {
+        switchHandler(result);
+    }
+    return result;
 }
-
-// void RotaryEncoder::beep(int type) {
-//   if (beeperPin != -1) {
-//     if (beeperHandler != 0) {
-//       beeperHandler(b);
-//     } else {
-//         Serial.println(type);
-//       switch (type) {
-//       case RE_SWITCH_UP:
-//       case RE_SWITCH_DOWN:
-//         tone(PIN_BEEPER, 400);
-//         delay(2);
-//         break;
-//       case 3: // Error
-//         tone(PIN_BEEPER, 1000);
-//         delay(10);
-//         break;
-//       default: // Menu
-//         tone(PIN_BEEPER, 250);
-//         delay(1);
-//         tone(PIN_BEEPER, 250);
-//         delay(1);
-//         tone(PIN_BEEPER, 250);
-//         delay(1);
-//       }
-//       noTone(PIN_BEEPER);
-//     }
-//   }
-// }
