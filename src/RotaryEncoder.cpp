@@ -5,16 +5,29 @@ const uint8_t RotaryEncoder::states[] = {0, 4, 1, 0, 2, 1, 1, 0, 2, 3,
                                          5, 4, 6, 5, 5, 6, 6, 0};
 
 RotaryEncoder::RotaryEncoder(int a, int b) {
-    this->a = a;
-    this->b = b;
-    this->sw = -1;
+	aBit = digitalPinToBitMask(a);
+	uint8_t aPort = digitalPinToPort(a);
+	if (aPort == NOT_A_PIN) return;
+    aIn = portInputRegister(aPort);
+
+	bBit = digitalPinToBitMask(b);
+	uint8_t bPort = digitalPinToPort(b);
+	if (bPort == NOT_A_PIN) return;
+    bIn = portInputRegister(bPort);
+
     pinMode(a, INPUT);
     pinMode(b, INPUT);
+
+    lastRaw=(*aIn&aBit?1:0)|(*bIn&bBit?2:0);
 }
 RotaryEncoder::RotaryEncoder(int a, int b, int sw) : RotaryEncoder(a, b) {
-    this->sw = sw;
+	sBit = digitalPinToBitMask(sw);
+	uint8_t sPort = digitalPinToPort(sw);
+	if (sPort == NOT_A_PIN) return;
+    sIn = portInputRegister(sPort);
+
     pinMode(sw, INPUT_PULLUP);
-    lastSwitchState = PIN_PORT & SW_BYTE;
+    lastSwitchState = 1;
 }
 
 void RotaryEncoder::setRotationHandler(RotataryHandler handler) {
@@ -40,11 +53,11 @@ bool RotaryEncoder::setLockClickDelay(unsigned int delay) {
 }
 
 int RotaryEncoder::decodeRotaryEncoder() {
-    uint8_t raw = PIN_PORT & AB_BYTE;
+    uint8_t raw=(*aIn&aBit?1:0)|(*bIn&bBit?2:0);
     int result = RE_NO_ACTION;
     if (lastRaw != raw) {
         lastRaw = raw;
-        uint8_t state = states[(raw >> AB_SHIFT) | (lastState << 2)];
+        uint8_t state = states[(raw) | (lastState << 2)];
         if (state == 0) {
             if (lastState == 6) {
                 result = RE_TURN_CLOCKWISE;
@@ -61,11 +74,11 @@ int RotaryEncoder::decodeRotaryEncoder() {
 }
 int RotaryEncoder::decodeSwitch() {
     int result = RE_NO_ACTION;
-    if (event != RE_NO_ACTION || sw == -1) {
+    if (event != RE_NO_ACTION || sIn == 0) {
         result = event;
         event = RE_NO_ACTION;
     } else {
-        uint8_t switchState = PIN_PORT & SW_BYTE;
+        uint8_t switchState = *sIn&sBit?1:0;
         if (lastSwitchState != switchState) {
             lastSwitchState = switchState;
             if (!switchState) {

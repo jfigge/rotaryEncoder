@@ -47,7 +47,7 @@ void switcher(const int state) {
 }
 
 void setup() {
-    Serial.begin(BAUD_RATE);
+    Serial.begin(BAUD_RATE);    
     re.setRotationHandler(rotation);
     re.setSwitchHandler(switcher);
     re.setLockClickDelay(1000);

@@ -22,16 +22,18 @@ class RotaryEncoder {
     static const uint8_t states[];
 
    private:
-    int a, b, sw;
+    uint8_t	aBit, bBit,sBit;
+	volatile uint8_t *aIn = 0, *bIn = 0, *sIn = 0;
+
     unsigned long timer, dblClkTimer = 0;
-    int lastRaw = 12;
+    int lastRaw;
     int lastState = 6;
-    int lastSwitchState = 0;
+    int lastSwitchState = 1;
     bool longHold = false;
     int event = RE_NO_ACTION;
     unsigned long hlfClkDelay = 133, dblClkDelay = 200, longClkDelay = 1000;
     RotataryHandler rotaryHandler = 0;
-    SwitchHandler switchHandler = 0;
+    SwitchHandler switchHandler = 1;
 
    public:
     RotaryEncoder(int a, int b);
